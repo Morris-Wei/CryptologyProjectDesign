@@ -4,7 +4,7 @@ This project is one of implementation of requirements which were published as ho
 密码学与安全协议大作业
 
 ## 描述
-![](\\img\\Snipaste_2021-10-22_14-50-16.png)
+![](https://raw.githubusercontent.com/Morris-Wei/CryptologyProjectDesign/main/img/Snipaste_2021-10-22_14-50-16.png)
 
 1. 说明：
    （1）M表示明文，H表示Hash函数，E表示加密算法，D表示解密算法，RKA表示发送方A的私钥，UKA表示发送方A的公钥，RKB表示发送方B的私钥，UKB表示发送方B的公钥，||表示组合。 
