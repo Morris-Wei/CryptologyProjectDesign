@@ -69,11 +69,10 @@ class PGPSender(PGPConfig):
 
         sym_crypted = "" # 对称加密后的数据
         if self.symmetic_func == 'AES':
+            aes = AES.AES(master_key=self.sym_key, key_length=self.key_length // 8)
             stringChunkSize = 128 // 4
             for i in range(0, len(plaintextWithSig), stringChunkSize):
-                chunked = plaintextWithSig[i:i+stringChunkSize] if i+stringChunkSize < len(plaintextWithSig) else \
-                    plaintextWithSig[i:]
-                aes = AES.AES(master_key = self.sym_key, key_length = self.key_length // 8)
+                chunked = plaintextWithSig[i:i+stringChunkSize] if i+stringChunkSize < len(plaintextWithSig) else plaintextWithSig[i:]
                 if len(chunked) < stringChunkSize:
                     sym_crypted += aes.encrypt(chunked, padding=True)
                     self.ispad = True
@@ -88,6 +87,7 @@ class PGPSender(PGPConfig):
                 des = DES.des()
                 if len(chunked) < stringChunkSize:
                     sym_crypted += des.encrypt(self.sym_key,chunked, padding=True)
+                    self.ispad = True
                 else:
                     sym_crypted += des.encrypt(self.sym_key,chunked, padding=False)
         print('-'*30)
@@ -100,6 +100,17 @@ class PGPSender(PGPConfig):
         self.sym_key_field_length = len(AllConvert.numtohex(pub_encrypted_sym_key))
         result = sym_crypted + AllConvert.numtohex(pub_encrypted_sym_key)
         return result
+
+    def fileEncrypt(self, inPath, outPath):
+        with open(inPath, "rb") as fp:
+            if fp:
+                file_byte = fp.read()
+            else:
+                raise Exception("File not exists!")
+        self.text = AllConvert.hextoasciiStr(file_byte.hex())
+        file_byte = bytes.fromhex(self.stringCrypt())
+        with open(outPath, "wb") as fp:
+            fp.write(file_byte)
 
 
 class PGPRecipient(PGPConfig):
@@ -146,6 +157,8 @@ class PGPRecipient(PGPConfig):
                     sym_decrypted += aes.decrypt(crypted_text[i:i+chunk_size])
                 elif self.ispad:
                     sym_decrypted += aes.decrypt(crypted_text[i:], padding=True)
+                elif not self.ispad:
+                    sym_decrypted += aes.decrypt(crypted_text[i:])
 
         if self.symmetic_func == 'DES':
             chunk_size =  64 // 4
@@ -155,6 +168,8 @@ class PGPRecipient(PGPConfig):
                     sym_decrypted += des.decrypt(self.sym_key, crypted_text[i:i+chunk_size])
                 elif self.ispad:
                     sym_decrypted += des.decrypt(self.sym_key, crypted_text[i:], padding=True)
+                elif not self.ispad:
+                    sym_decrypted += des.decrypt(self.sym_key, crypted_text[i:])
 
         sig_field_encrypted = sym_decrypted[-self.sig_field_length:]
         message_hex = sym_decrypted[0:-self.sig_field_length]
@@ -176,6 +191,19 @@ class PGPRecipient(PGPConfig):
             return
         return message_asc
 
+    def fileDecrypt(self, inPath, outPath):
+        with open(inPath, "rb") as fp:
+            if fp:
+                file_byte = fp.read()
+            else:
+                raise Exception("File not exists!")
+        self.text = file_byte.hex()
+        tmp1 = self.stringDecrypt(self.text)
+        tmp2 = AllConvert.asciistrtohex(tmp1)
+        file_byte = bytes.fromhex(tmp2)
+        with open(outPath, "wb") as fp:
+            fp.write(file_byte)
+
 
 def switchKey(sender:PGPSender, receiver:PGPRecipient):
     receiver.pub_key_sender = sender.pub_key_sender
@@ -188,16 +216,18 @@ def configTransmit(sender:PGPSender, receiver:PGPRecipient):
 
 if __name__ == '__main__':
     hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, text, sym_mode = \
-        ['MD5', 'AES', 128, 'string', 20, 'nmslwq', 1]
+        ['MD5', 'DES', 64, 'string', 20, 'nmslwq', 1]
     ps = PGPSender(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, text, sym_mode)
     pr = PGPRecipient(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, text, sym_mode)
     ps.keyGenerate()
     pr.keyGenerate()
     switchKey(ps, pr)
-    res = ps.stringCrypt()
+    ps.fileEncrypt(r'E:/a.png', r"E:/a.enc")
     configTransmit(ps, pr)
-    res2 = pr.stringDecrypt(res)
-    if res2:
-        print(res2)
+    pr.fileDecrypt(r"E:/a.enc", r'E:/b.png')
+    # if res2:
+    #     print(res2)
+    # print("res: ")
     # for i in range(0, len(res), 20):
     #     print(res[i:i+20])
+

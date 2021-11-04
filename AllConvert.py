@@ -19,8 +19,15 @@ def hextonum(hexstr:str): # hex字符串到整数的转换
     fullHexStr = "0x" + hexstr
     return eval(fullHexStr)
 
-def numtohex(num:int): # 整数到hex字符串的转换
-    return hex(num)[2:]
+def numtohex(num:int, length = None): # 整数到hex字符串的转换,这里的lenth是16进制下的位数
+    if not length:
+        hexed = hex(num)[2:]
+        if len(hexed) % 2 == 1:
+            hexed = "0" + hexed
+    else:
+        num_byte_form = int(num).to_bytes(length=length // 2, byteorder= "big")
+        hexed = num_byte_form.hex()
+    return hexed
 
 def hextoasciiStr(hexstr:str): # return asciistr
     hexstr_len = len(hexstr)
@@ -34,9 +41,8 @@ def asciistrtohex(asciistr:str): # return a hexstr
     asciistr_len = len(asciistr)
     s = ""
     for i in range(0, asciistr_len):
-        hexed = hex(ord(asciistr[i]))[2:]
-        if ord(asciistr[i]) < 15: # 这里需要保留一位0
-            hexed = '0' + hexed
+        num_form = int(ord(asciistr[i])).to_bytes(length=1, byteorder='big')
+        hexed = num_form.hex()
         s += hexed
     return s
 
@@ -45,5 +51,5 @@ if __name__ == "__main__":
     s = hextoasciiStr('c3')
     s += chr(1)
     c = asciistrtohex(s)
-    # print(he_str)
     print(c)
+    print(numtohex(76746))
