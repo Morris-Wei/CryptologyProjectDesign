@@ -9,8 +9,8 @@ import base64
 import os
 
 ## 以下为python原生或是发行包中的算法
-from Crypto import PublicKey
-from pyDes import des, CBC, PAD_PKCS5
+# from Crypto import PublicKey
+# from pyDes import des, CBC, PAD_PKCS5
 import rsa
 import hashlib
 from Crypto.Cipher import DES as DES_Pro
@@ -28,11 +28,9 @@ class PGPConfig:
         self.seed = seed
 
 class PGPSender(PGPConfig):
-    def __init__(self, hashfunc, symmetic_func, sym_key_length, crypted_obj, seed ,text, sym_mode = 1):
+    def __init__(self, hashfunc, symmetic_func, sym_key_length, crypted_obj, seed , sym_mode = 1):
         super().__init__(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, sym_mode)
-        if len(text) == 0:
-            raise Exception("Empty text Error, Enter text")
-        self.text = text
+        self.text = None
         self.pr_key_sender = None # 发送方私钥
         self.pub_key_sender = None # 发送方公钥
         self.pub_key_recipient = None # 接收方公钥
@@ -46,19 +44,31 @@ class PGPSender(PGPConfig):
         self.issympad = False # 公钥加密的对称密钥同上
 
 
-    def keyGenerate(self):
+    def keyGenerate(self, key=""):
         RSAkey = RSA.get_RSAKey()
         Pub_key = RSAkey['puk'] # Pub = [n, e]
         Pr_key = RSAkey['prk'] # Pr = [n, d]
         self.pub_key_sender = Pub_key
         self.pr_key_sender = Pr_key
-        random.seed(self.seed)
-        Sym_key = random.randint(2**(self.key_length-1), 2**self.key_length)
-        symkey = AllConvert.numtohex(Sym_key)
+        if self.sym_mode == 1:
+            random.seed(self.seed)
+            Sym_key = random.randint(2**(self.key_length-1), 2**self.key_length)
+            symkey = AllConvert.numtohex(Sym_key)
+        elif self.sym_mode == 0: #密钥由外部输入
+            symkey = key
         print("symkey:", symkey)
         self.sym_key = symkey
 
-    def keyGenerateAndSave(self, sender_pub_path:str): # 当然这里只保存公钥
+    def keyGenerateAndSave(self, sender_pub_path:str, key=""): # 当然这里只保存公钥
+        if self.sym_mode == 1:
+            random.seed(self.seed)
+            Sym_key = random.randint(2 ** (self.key_length - 1), 2 ** self.key_length)
+            symkey = AllConvert.numtohex(Sym_key)
+        elif self.sym_mode == 0:
+            symkey = key
+
+        print("symkey:", symkey)
+        self.sym_key = bytes.fromhex(symkey)
         self.pub_key_sender, self.pr_key_sender = rsa.newkeys(1024)
         if "PEM" in sender_pub_path.upper():
             sender_pub_path = sender_pub_path[:-4]
@@ -71,7 +81,8 @@ class PGPSender(PGPConfig):
         return True
     
 
-    def stringCrypt(self): # 加密前需要生成密钥，并交换公钥, block是128bit的16进制字符串
+    def stringCrypt(self, message:str): # 加密前需要生成密钥，并交换公钥, block是128bit的16进制字符串
+        self.text = message
         if len(self.pr_key_sender) == 0  \
                 or len(self.pub_key_sender) == 0  \
                 or len(self.pub_key_recipient) == 0:
@@ -177,7 +188,7 @@ class PGPSender(PGPConfig):
         self.sig_field_length = len(signed) # 128//8
 
         if self.symmetic_func == "AES":
-            self.sym_key = Random.get_random_bytes(self.key_length // 8)
+            # self.sym_key = Random.get_random_bytes(self.key_length // 8)
             aes = AES_Pro.new(self.sym_key, AES_Pro.MODE_ECB)
             with open(inPath, "rb") as fp:
                 with open(outPath, "ab") as fp2:
@@ -205,7 +216,7 @@ class PGPSender(PGPConfig):
 
 
         elif self.symmetic_func == "DES":
-            self.sym_key = Random.get_random_bytes(8)
+            # self.sym_key = Random.get_random_bytes(8)
             des = DES_Pro.new(self.sym_key, DES_Pro.MODE_ECB)
             with open(inPath, "rb") as fp:
                 with open(outPath, "ab") as fp2:
@@ -231,12 +242,12 @@ class PGPSender(PGPConfig):
                 fp3.write(encrypted_sym_key)
 
 
+
+
 class PGPRecipient(PGPConfig):
-    def __init__(self, hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, text="", sym_mode=1):
+    def __init__(self, hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, sym_mode=1):
         super().__init__(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, sym_mode)
-        if len(text) == 0:
-            raise Exception("Empty text Error, Enter text")
-        self.text = text
+        self.text = None
         self.pr_key_receiver = None # 发送方私钥
         self.pub_key_receiver = None  # 发送方公钥
         self.pub_key_sender = None  # 接收方公钥
@@ -401,37 +412,34 @@ def configTransmit(sender:PGPSender, receiver:PGPRecipient):
     receiver.ismessagepad = sender.ismessagepad
     receiver.issympad = sender.issympad
 
-# def chunkFileEncryption(inFilePath:str, outFilePath:str, chunk_size = 6400,): # chunk_size smaller than filesize
-#     fi = open(inFilePath, "rb")
-#     fo = open(outFilePath, "wb")
-#     fileChunk = fi.read(chunk_size)
-#     while fileChunk:
-
-
 
 if __name__ == '__main__':
-    hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, text, sym_mode = \
-        ['MD5', 'DES', 64, 'string', 20, 'nmslwq', 1]
-    ps = PGPSender(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, text, sym_mode)
-    pr = PGPRecipient(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, text, sym_mode)
-    ps.keyGenerate()
-    pr.keyGenerate()
-    ps.keyGenerateAndSave(r"E:/ps.pem")
+    hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, sym_mode = \
+        ['MD5', 'DES', 64, 'string', 20, 0]
+    # 以下是文件加密
+    ps = PGPSender(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, sym_mode)
+    pr = PGPRecipient(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, sym_mode)
+    # ps.keyGenerate() # 加密字符串时调用这两个
+    # pr.keyGenerate()
+    ps.keyGenerateAndSave(r"E:/ps.pem","a6b563b1e794ee13")
     pr.keyGenerateAndSave(r"E:/pr.pem")
     ps.loadKey(r"E:/pr.pem")
     pr.loadKey(r"E:/ps.pem")
-    switchKey(ps, pr)
+    # switchKey(ps, pr) # 加密字符串时调用这两个
     ps.bigFileEncryption(r"E:/计算机学习2/深度学习（花书）.pdf", r"E:/计算机学习2/dl.dat")
     configTransmit(ps, pr)
     pr.bigFileDecryption(r"E:/计算机学习2/dl.dat", r"E:/k.pdf")
+    # 以下是加密字符串过程
+    ps1 = PGPSender(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, sym_mode)
+    pr1 = PGPRecipient(hashfunc, symmetic_func, sym_key_length, crypted_obj, seed, sym_mode)
+    ps1.keyGenerate("a6b563b1e794ee13")
+    pr1.keyGenerate()
+    switchKey(ps1, pr1)
+    res = ps1.stringCrypt("dsjnsakjdionfiodsnhjfinewihjbfibdsgiuvbdsniufhnuisd")
+    print(res)
+    configTransmit(ps1, pr1)
+    res2 = pr1.stringDecrypt(res)
+    print(res2)
 
-    # ps.fileEncrypt(r'E:/qdh.jpg', r"E:/a.enc")
-    # configTransmit(ps, pr)
-    # pr.fileDecrypt(r"E:/a.enc", r'E:/a.jpg')
 
-    # if res2:
-    #     print(res2)
-    # print("res: ")
-    # for i in range(0, len(res), 20):
-    #     print(res[i:i+20])
 
